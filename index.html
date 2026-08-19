@@ -548,7 +548,7 @@ let autoListen = true;
 let messages = [
   { role: "system", content: "You are a warm, sharp, knowledgeable voice assistant on a phone call. Answer any question the caller asks — technology, science, everyday life, anything — clearly and conversationally, like a smart human would on the phone. Keep answers reasonably concise (2-5 sentences) unless asked for more detail, since this is spoken aloud." }
 ];
-let audioCtx = null, analyser = null, micStream = null, rafId = null;
+let rafId = null;
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -680,39 +680,31 @@ function buildRecognition(){
 }
 
 // ---------- Mic visualizer ----------
-async function startVisualizer(){
-  try{
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioCtx.createMediaStreamSource(micStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 64;
-    src.connect(analyser);
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    const animate = () => {
-      analyser.getByteFrequencyData(data);
-      bars.forEach((b, i) => {
-        const v = data[i % data.length] / 255;
-        b.style.height = (6 + v * 34) + "px";
-      });
-      rafId = requestAnimationFrame(animate);
-    };
-    animate();
-  }catch(e){
-    // The visualizer's getUserMedia request is only for the animated bars.
-    // On many mobile browsers, the mic is already claimed by SpeechRecognition
-    // (started separately in beginListening), so this second request can fail
-    // even though speech recognition itself is working fine. Fail silently here
-    // instead of alarming the user with a false "microphone access failed" banner.
-    console.warn("Visualizer mic stream unavailable (non-fatal):", e);
-  }
+// IMPORTANT: this used to call getUserMedia() separately to drive the bars
+// off real audio levels. On mobile, that competed with SpeechRecognition's
+// own internal mic capture for exclusive access to the microphone, which
+// could starve SpeechRecognition of real audio and cause it to never
+// produce a final result (endless silent "listening" loop). The bars are
+// purely cosmetic, so we now animate them synthetically instead of touching
+// the mic at all — this guarantees SpeechRecognition gets uncontested access.
+function startVisualizer(){
+  let t = 0;
+  const animate = () => {
+    t += 1;
+    bars.forEach((b, i) => {
+      const wave = Math.sin(t * 0.18 + i * 0.9) * 0.5 + 0.5;
+      const jitter = Math.random() * 0.25;
+      const v = Math.min(1, wave * 0.75 + jitter);
+      b.style.height = (6 + v * 34) + "px";
+    });
+    rafId = requestAnimationFrame(animate);
+  };
+  animate();
 }
 function stopVisualizer(){
   if(rafId) cancelAnimationFrame(rafId);
   rafId = null;
   bars.forEach(b => b.style.height = "8px");
-  if(micStream){ micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-  if(audioCtx){ audioCtx.close().catch(()=>{}); audioCtx = null; }
 }
 
 // ---------- Model loading ----------
