@@ -785,13 +785,18 @@ async function handleUserTurn(text){
   try{
     let answer;
     if(useCloud){
-      const result = await puter.ai.chat(messages, {
+      const withTimeout = (p, ms) => Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Cloud AI request timed out")), ms))
+      ]);
+      const result = await withTimeout(puter.ai.chat(messages, {
         model: "claude-sonnet-4-6",
         temperature: 0.7,
         max_tokens: 400
-      });
+      }), 25000);
       const content = result?.message?.content;
       answer = (Array.isArray(content) ? content.map(c => c.text || "").join("") : (content || result?.toString?.() || "")).trim();
+      if(!answer) throw new Error("Empty response from cloud AI");
     }else{
       const eng = await ensureEngine();
       const reply = await eng.chat.completions.create({
@@ -851,8 +856,25 @@ async function startCall(){
   callBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.16 21 3 13.84 3 5a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2z"/></svg> End Call';
   callBtn.classList.add("end");
   try{
+    await engineModeReady;
+    // Sign in to Puter's cloud AI now, while we're still inside the direct
+    // button-tap gesture. If we waited until the user finished speaking and
+    // tried to sign in from inside the speech-recognition callback instead,
+    // the sign-in popup would count as unsolicited and mobile browsers would
+    // silently block it — leaving handleUserTurn() waiting forever with no
+    // visible error, which looks like "no response at all".
+    if(useCloud && window.puter && puter.auth){
+      const signedIn = await puter.auth.isSignedIn().catch(() => false);
+      if(!signedIn){
+        setStatus("SIGN IN TO CLOUD AI", "thinking");
+        setOrbState("thinking");
+        await puter.auth.signIn();
+      }
+    }
     await ensureEngine();
   }catch(e){
+    console.error(e);
+    warn("Couldn't connect to the cloud AI. If a sign-in popup appeared, please allow popups for this site, then tap Start Call again.");
     endCall();
     return;
   }
