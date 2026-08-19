@@ -6,6 +6,7 @@
 <title>Ring — AI Voice Caller</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://js.puter.com/v2/"></script>
 <style>
   :root{
     --bg:#0F1119;
@@ -599,11 +600,31 @@ function warn(msg){
 }
 function clearWarn(){ warnBanner.classList.remove("show"); }
 
-// ---------- WebGPU check ----------
-if(!("gpu" in navigator)){
-  warn("Your browser doesn't support WebGPU, so the on-device brain can't run. Please open this in a recent desktop Chrome or Edge (v113+).");
-  callBtn.disabled = true;
+// ---------- WebGPU check + cloud fallback ----------
+let useCloud = false; // true => use Puter.js cloud AI instead of on-device WebLLM
+const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+async function hasRealWebGPU(){
+  if(!("gpu" in navigator)) return false;
+  try{
+    const adapter = await navigator.gpu.requestAdapter();
+    return !!adapter;
+  }catch(_e){
+    return false;
+  }
 }
+
+async function decideEngineMode(){
+  const gpuOk = await hasRealWebGPU();
+  if(!gpuOk || isMobileUA){
+    useCloud = true;
+    modelSelect.disabled = true;
+    const brainHint = document.querySelector('#modelSelect')?.closest('.field')?.querySelector('.hint');
+    if(brainHint) brainHint.textContent = "This device is using cloud AI (Puter.js) instead of the on-device brain, since on-device models need WebGPU + a lot of GPU memory that most phones don't have.";
+    document.querySelector(".footnote").textContent = "Cloud AI (via Puter.js) on this device · desktop Chrome/Edge uses the on-device brain instead";
+  }
+}
+const engineModeReady = decideEngineMode();
 
 // ---------- Speech Recognition setup ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -636,7 +657,16 @@ function buildRecognition(){
   };
   r.onerror = (e) => {
     if(e.error === "no-speech" || e.error === "aborted") { return; }
-    warn("Mic error: " + e.error + ". Check microphone permission.");
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+      warn("Microphone permission is blocked for this site. Allow it in your browser's site settings, then reload.");
+    }else if(e.error === "audio-capture"){
+      warn("No microphone was found, or it's being used by another app/tab. Close other apps using the mic and try again.");
+    }else{
+      // Transient errors (e.g. network, or the mic momentarily busy) — don't
+      // scare the user, just try to recover by restarting on the next onend.
+      console.warn("Speech recognition error (non-fatal):", e.error);
+      return;
+    }
     setStatus("MIC ERROR");
     setOrbState(null);
   };
@@ -669,7 +699,12 @@ async function startVisualizer(){
     };
     animate();
   }catch(e){
-    warn("Couldn't access the microphone. Please allow mic permission.");
+    // The visualizer's getUserMedia request is only for the animated bars.
+    // On many mobile browsers, the mic is already claimed by SpeechRecognition
+    // (started separately in beginListening), so this second request can fail
+    // even though speech recognition itself is working fine. Fail silently here
+    // instead of alarming the user with a false "microphone access failed" banner.
+    console.warn("Visualizer mic stream unavailable (non-fatal):", e);
   }
 }
 function stopVisualizer(){
@@ -682,6 +717,8 @@ function stopVisualizer(){
 
 // ---------- Model loading ----------
 async function ensureEngine(){
+  await engineModeReady;
+  if(useCloud) return null; // no local engine needed, Puter.js handles it per-request
   const wanted = modelSelect.value;
   if(engine && engineModel === wanted) return engine;
   engineLoading = true;
@@ -754,13 +791,24 @@ async function handleUserTurn(text){
   setCaption("…", "RING");
 
   try{
-    const eng = await ensureEngine();
-    const reply = await eng.chat.completions.create({
-      messages,
-      temperature: 0.7,
-      max_tokens: 400
-    });
-    const answer = reply.choices[0].message.content.trim();
+    let answer;
+    if(useCloud){
+      const result = await puter.ai.chat(messages, {
+        model: "claude-sonnet-4-6",
+        temperature: 0.7,
+        max_tokens: 400
+      });
+      const content = result?.message?.content;
+      answer = (Array.isArray(content) ? content.map(c => c.text || "").join("") : (content || result?.toString?.() || "")).trim();
+    }else{
+      const eng = await ensureEngine();
+      const reply = await eng.chat.completions.create({
+        messages,
+        temperature: 0.7,
+        max_tokens: 400
+      });
+      answer = reply.choices[0].message.content.trim();
+    }
     messages.push({ role: "assistant", content: answer });
     pushHistory("ai", answer);
     setCaption(answer, "RING");
