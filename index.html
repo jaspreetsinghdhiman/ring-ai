@@ -2,936 +2,240 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ring — AI Voice Caller</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Fast AI Voice Caller</title>
 <script src="https://js.puter.com/v2/"></script>
 <style>
-  :root{
-    --bg:#0F1119;
-    --bg-2:#171A26;
-    --surface:#1C202F;
-    --surface-2:#242939;
-    --line:#2C3145;
-    --text:#EDEDF3;
-    --muted:#8A8DA3;
-    --muted-2:#5F6376;
-    --amber:#FF8A5C;
-    --amber-dim:#8a4f37;
-    --blue:#6C8CFF;
-    --blue-dim:#3a4573;
-    --green:#5BD08A;
-    --danger:#FF5C6C;
-    --radius:20px;
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{height:100%;}
-  body{
-    background:
-      radial-gradient(1200px 600px at 50% -10%, #1a1e2e 0%, var(--bg) 55%),
-      var(--bg);
-    color:var(--text);
-    font-family:'Inter', sans-serif;
-    min-height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:24px;
-    overflow-x:hidden;
-  }
-  .app{
-    width:100%;
-    max-width:460px;
-    display:flex;
-    flex-direction:column;
-    gap:18px;
-  }
-
-  /* Top bar */
-  .topbar{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:2px 4px;
-  }
-  .brand{
-    font-family:'Space Grotesk', sans-serif;
-    font-weight:600;
-    font-size:19px;
-    letter-spacing:0.2px;
-    display:flex;
-    align-items:center;
-    gap:9px;
-  }
-  .brand .dot{
-    width:9px; height:9px; border-radius:50%;
-    background:var(--muted-2);
-    box-shadow:0 0 0 0 rgba(91,208,138,0.5);
-    transition:background .3s;
-  }
-  .brand .dot.live{
-    background:var(--green);
-    animation:pulseDot 1.6s infinite;
-  }
-  @keyframes pulseDot{
-    0%{box-shadow:0 0 0 0 rgba(91,208,138,.55);}
-    70%{box-shadow:0 0 0 8px rgba(91,208,138,0);}
-    100%{box-shadow:0 0 0 0 rgba(91,208,138,0);}
-  }
-  .icon-btn{
-    background:var(--surface);
-    border:1px solid var(--line);
-    width:38px; height:38px;
-    border-radius:12px;
-    display:flex; align-items:center; justify-content:center;
-    color:var(--muted);
-    cursor:pointer;
-    transition:.15s;
-  }
-  .icon-btn:hover{ color:var(--text); border-color:#3a3f56; }
-  .icon-btn:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-
-  /* Call card */
-  .card{
-    background:linear-gradient(180deg, var(--bg-2), var(--surface) 100%);
-    border:1px solid var(--line);
-    border-radius:28px;
-    padding:34px 26px 26px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    position:relative;
-    overflow:hidden;
-  }
-  .card::before{
-    content:"";
-    position:absolute; inset:0;
-    background:radial-gradient(320px 200px at 50% 0%, rgba(108,140,255,0.08), transparent 70%);
-    pointer-events:none;
-  }
-  .status-label{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:1.6px;
-    text-transform:uppercase;
-    color:var(--muted-2);
-    margin-bottom:22px;
-  }
-  .status-label .val{ color:var(--amber); transition:color .2s; }
-  .status-label .val.listening{ color:var(--blue); }
-  .status-label .val.speaking{ color:var(--green); }
-  .status-label .val.thinking{ color:var(--amber); }
-
-  /* Orb */
-  .orb-wrap{
-    position:relative;
-    width:220px; height:220px;
-    display:flex; align-items:center; justify-content:center;
-    margin-bottom:22px;
-  }
-  .ring{
-    position:absolute; border-radius:50%;
-    border:1px solid rgba(108,140,255,0.25);
-    opacity:0;
-  }
-  .ring.animate{ animation:ringOut 2.2s ease-out infinite; }
-  .ring:nth-child(2){ animation-delay:.6s !important; }
-  .ring:nth-child(3){ animation-delay:1.2s !important; }
-  @keyframes ringOut{
-    0%{ width:130px; height:130px; opacity:.55; }
-    100%{ width:220px; height:220px; opacity:0; }
-  }
-  .orb{
-    width:130px; height:130px;
-    border-radius:50%;
-    background:radial-gradient(circle at 32% 28%, #3a4573, #171a26 70%);
-    border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center;
-    cursor:pointer;
-    position:relative;
-    z-index:2;
-    transition:transform .15s ease, box-shadow .3s ease, background .3s ease;
-    box-shadow:0 0 0 0 rgba(255,138,92,0);
-  }
-  .orb:hover{ transform:scale(1.03); }
-  .orb:active{ transform:scale(0.97); }
-  .orb.listening{
-    background:radial-gradient(circle at 32% 28%, #3a4573, #171a26 70%);
-    box-shadow:0 0 40px 4px rgba(108,140,255,0.25);
-    border-color:var(--blue-dim);
-  }
-  .orb.speaking{
-    background:radial-gradient(circle at 32% 28%, #2f5c46, #171a26 70%);
-    box-shadow:0 0 40px 4px rgba(91,208,138,0.22);
-    border-color:#2f5c46;
-  }
-  .orb.thinking{
-    box-shadow:0 0 30px 2px rgba(255,138,92,0.18);
-  }
-  .orb svg{ width:44px; height:44px; }
-
-  .bars{
-    position:absolute;
-    display:flex;
-    align-items:center;
-    gap:4px;
-    z-index:3;
-    pointer-events:none;
-  }
-  .bars span{
-    width:3.5px;
-    height:8px;
-    border-radius:3px;
-    background:var(--blue);
-    transform-origin:center;
-    transition:height .08s ease;
-  }
-  .orb.speaking ~ .bars span, .bars.speak span{ background:var(--green); }
-
-  /* Caption */
-  .caption{
-    min-height:64px;
-    width:100%;
-    text-align:center;
-    font-size:16px;
-    line-height:1.5;
-    color:var(--text);
-    padding:0 6px;
-  }
-  .caption .placeholder{ color:var(--muted-2); font-size:14.5px; }
-  .caption .who{
-    display:block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px;
-    letter-spacing:1.4px;
-    text-transform:uppercase;
-    color:var(--muted-2);
-    margin-bottom:6px;
-  }
-
-  /* Controls row */
-  .controls{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:16px;
-    margin-top:24px;
-  }
-  .ctrl{
-    background:var(--surface-2);
-    border:1px solid var(--line);
-    color:var(--muted);
-    width:46px; height:46px;
-    border-radius:16px;
-    display:flex; align-items:center; justify-content:center;
-    cursor:pointer;
-    transition:.15s;
-  }
-  .ctrl:hover{ color:var(--text); border-color:#3a3f56; }
-  .ctrl.danger{ color:var(--danger); }
-  .ctrl.danger:hover{ background:rgba(255,92,108,0.08); border-color:#5a2a30; }
-  .ctrl:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
-
-  .call-btn{
-    background:var(--amber);
-    color:#241408;
-    font-family:'Space Grotesk', sans-serif;
-    font-weight:600;
-    font-size:14.5px;
-    border:none;
-    border-radius:16px;
-    padding:0 22px;
-    height:46px;
-    display:flex; align-items:center; gap:8px;
-    cursor:pointer;
-    transition:filter .15s, transform .15s;
-  }
-  .call-btn:hover{ filter:brightness(1.08); }
-  .call-btn:active{ transform:scale(0.97); }
-  .call-btn.end{ background:var(--danger); color:#2a0f13; }
-  .call-btn:disabled{ opacity:.45; cursor:not-allowed; }
-
-  /* Loading */
-  .loadbar-wrap{
-    width:100%;
-    margin-top:18px;
-    display:none;
-  }
-  .loadbar-wrap.show{ display:block; }
-  .loadbar-track{
-    width:100%; height:5px; border-radius:6px;
-    background:var(--surface-2);
-    overflow:hidden;
-    border:1px solid var(--line);
-  }
-  .loadbar-fill{
-    height:100%; width:0%;
-    background:linear-gradient(90deg, var(--blue), var(--amber));
-    transition:width .25s ease;
-  }
-  .loadbar-text{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px;
-    color:var(--muted-2);
-    margin-top:8px;
-    text-align:center;
-  }
-
-  /* Transcript history */
-  .history-toggle{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:6px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:0.8px;
-    color:var(--muted-2);
-    cursor:pointer;
-    padding:6px 0 2px;
-  }
-  .history-toggle:hover{ color:var(--muted); }
-  .history{
-    display:none;
-    flex-direction:column;
-    gap:10px;
-    max-height:260px;
-    overflow-y:auto;
-    padding:16px 18px;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:18px;
-  }
-  .history.show{ display:flex; }
-  .history::-webkit-scrollbar{ width:6px; }
-  .history::-webkit-scrollbar-thumb{ background:var(--line); border-radius:6px; }
-  .msg{
-    font-size:13.5px;
-    line-height:1.5;
-    padding:9px 12px;
-    border-radius:12px;
-    max-width:86%;
-  }
-  .msg.user{
-    align-self:flex-end;
-    background:var(--blue-dim);
-    color:#dfe4ff;
-    border-bottom-right-radius:4px;
-  }
-  .msg.ai{
-    align-self:flex-start;
-    background:var(--surface-2);
-    color:var(--text);
-    border-bottom-left-radius:4px;
-  }
-  .empty-hist{
-    color:var(--muted-2);
-    font-size:12.5px;
-    text-align:center;
-    padding:8px;
-  }
-
-  /* Settings drawer */
-  .drawer-backdrop{
-    position:fixed; inset:0;
-    background:rgba(6,7,12,0.6);
-    backdrop-filter:blur(2px);
-    display:none;
-    align-items:flex-end;
-    justify-content:center;
-    z-index:50;
-  }
-  .drawer-backdrop.show{ display:flex; }
-  .drawer{
-    width:100%; max-width:460px;
-    background:var(--bg-2);
-    border:1px solid var(--line);
-    border-bottom:none;
-    border-radius:24px 24px 0 0;
-    padding:22px 22px 28px;
-    animation:slideUp .25s ease;
-  }
-  @keyframes slideUp{ from{ transform:translateY(24px); opacity:0;} to{ transform:translateY(0); opacity:1;} }
-  .drawer h3{
-    font-family:'Space Grotesk', sans-serif;
-    font-size:16px;
-    margin-bottom:16px;
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  .drawer h3 span.close{
-    cursor:pointer; color:var(--muted); font-weight:400; font-size:20px; line-height:1;
-  }
-  .field{ margin-bottom:16px; }
-  .field label{
-    display:block;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px;
-    letter-spacing:1px;
-    text-transform:uppercase;
-    color:var(--muted-2);
-    margin-bottom:7px;
-  }
-  select, .toggle-row{
-    width:100%;
-    background:var(--surface-2);
-    border:1px solid var(--line);
-    color:var(--text);
-    font-family:'Inter', sans-serif;
-    font-size:14px;
-    padding:11px 12px;
-    border-radius:12px;
-    outline:none;
-  }
-  select:focus{ border-color:var(--blue); }
-  .toggle-row{
-    display:flex; align-items:center; justify-content:space-between;
-    cursor:pointer;
-  }
-  .switch{
-    width:38px; height:22px; border-radius:12px;
-    background:var(--surface); border:1px solid var(--line);
-    position:relative; transition:.2s;
-  }
-  .switch::after{
-    content:""; position:absolute; top:2px; left:2px;
-    width:16px; height:16px; border-radius:50%;
-    background:var(--muted-2); transition:.2s;
-  }
-  .switch.on{ background:var(--blue-dim); border-color:var(--blue); }
-  .switch.on::after{ left:18px; background:var(--blue); }
-  .hint{ font-size:11.5px; color:var(--muted-2); margin-top:8px; line-height:1.5; }
-
-  .footnote{
-    text-align:center;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px;
-    color:var(--muted-2);
-    letter-spacing:.4px;
-    padding-bottom:4px;
-  }
-
-  .warn-banner{
-    background:rgba(255,92,108,0.08);
-    border:1px solid #5a2a30;
-    color:#ffb3ba;
-    font-size:12.5px;
-    line-height:1.5;
-    padding:12px 14px;
-    border-radius:14px;
-    display:none;
-  }
-  .warn-banner.show{ display:block; }
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#020617;color:#fff;font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;padding:16px}
+.app{width:100%;max-width:430px;background:#0f172a;border:1px solid #263244;border-radius:28px;padding:22px;box-shadow:0 20px 60px #0008}
+h1{text-align:center;font-size:22px;margin:0 0 8px}.hint{text-align:center;color:#94a3b8;font-size:12px;margin-bottom:22px}
+.avatar{width:110px;height:110px;border-radius:50%;margin:10px auto 14px;display:grid;place-items:center;font-size:42px;background:linear-gradient(135deg,#2563eb,#7c3aed);box-shadow:0 0 40px #2563eb66}
+.active{animation:pulse 1.2s infinite}@keyframes pulse{50%{box-shadow:0 0 0 18px #2563eb18,0 0 55px #2563eb88}}
+#status{text-align:center;color:#60a5fa;font-weight:700;font-size:17px;min-height:25px}
+#sub{text-align:center;color:#64748b;font-size:12px;min-height:20px;margin:4px 0 15px}
+.langs{display:flex;gap:7px;margin-bottom:12px}.lang{flex:1;padding:10px;border:1px solid #334155;border-radius:10px;background:#1e293b;color:#cbd5e1}.lang.sel{border-color:#60a5fa;color:#60a5fa;background:#172554}
+#log{height:260px;overflow:auto;background:#020617;border-radius:16px;padding:12px;margin-bottom:14px}.msg{padding:10px 12px;margin:7px 0;border-radius:13px;font-size:13px;line-height:1.45;word-break:break-word}.you{background:#1d4ed8;margin-left:18%}.ai{background:#1e293b;margin-right:18%}.sys{text-align:center;color:#64748b;font-size:11px}
+.row{display:flex;gap:10px}button{cursor:pointer;font:inherit}.main{flex:1;border:0;border-radius:16px;padding:16px;color:#fff;font-weight:700;background:#2563eb}.main.end{background:#dc2626}.clear{width:55px;border:1px solid #334155;border-radius:16px;background:#1e293b;color:#fff}
+.note{font-size:10px;text-align:center;color:#475569;margin-top:12px}
 </style>
 </head>
 <body>
-
 <div class="app">
+<h1>🤖 Fast AI Voice Caller</h1>
+<div class="hint">Browser AI voice assistant</div>
+<div id="avatar" class="avatar">🤖</div>
+<div id="status">Ready</div>
+<div id="sub">Tap Start and allow microphone access</div>
 
-  <div class="topbar">
-    <div class="brand"><span class="dot" id="liveDot"></span>Ring</div>
-    <div style="display:flex; gap:8px;">
-      <button class="icon-btn" id="historyIconBtn" title="Transcript" aria-label="Transcript">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-      </button>
-      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
-      </button>
-    </div>
-  </div>
-
-  <div class="warn-banner" id="warnBanner"></div>
-
-  <div class="card">
-    <div class="status-label">STATUS — <span class="val" id="statusVal">TAP TO CALL</span></div>
-
-    <div class="orb-wrap">
-      <div class="ring" id="ring1"></div>
-      <div class="ring" id="ring2"></div>
-      <div class="ring" id="ring3"></div>
-      <div class="orb" id="orb" role="button" tabindex="0" aria-label="Start call">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#EDEDF3" stroke-width="1.6" id="orbIconPhone">
-          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
-        </svg>
-      </div>
-      <div class="bars" id="bars">
-        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-      </div>
-    </div>
-
-    <div class="caption" id="caption">
-      <span class="placeholder">Tap the orb and ask anything — tech, life, whatever's on your mind. No API key, runs free in your browser.</span>
-    </div>
-
-    <div class="controls">
-      <div class="ctrl" id="muteToggle" title="Mute mic" aria-label="Mute mic">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
-      </div>
-      <button class="call-btn" id="callBtn">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.16 21 3 13.84 3 5a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2z"/></svg>
-        Start Call
-      </button>
-      <div class="ctrl danger" id="clearBtn" title="Clear conversation" aria-label="Clear conversation">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg>
-      </div>
-    </div>
-
-    <div class="loadbar-wrap" id="loadWrap">
-      <div class="loadbar-track"><div class="loadbar-fill" id="loadFill"></div></div>
-      <div class="loadbar-text" id="loadText">Downloading model — first call only, cached after…</div>
-    </div>
-  </div>
-
-  <div class="history-toggle" id="historyToggle">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-    TRANSCRIPT
-  </div>
-  <div class="history" id="history">
-    <div class="empty-hist">Nothing said yet.</div>
-  </div>
-
-  <div class="footnote">100% in-browser AI · no server · no API key · Chrome/Edge desktop recommended</div>
+<div class="langs">
+<button class="lang sel" data-l="en-IN">English</button>
+<button class="lang" data-l="pa-IN">ਪੰਜਾਬੀ</button>
+<button class="lang" data-l="hi-IN">हिन्दी</button>
 </div>
 
-<!-- Settings Drawer -->
-<div class="drawer-backdrop" id="drawerBackdrop">
-  <div class="drawer">
-    <h3>Settings <span class="close" id="closeDrawer">&times;</span></h3>
+<div id="log"><div class="msg sys">Press Start Call to begin.</div></div>
 
-    <div class="field">
-      <label>Brain (model size)</label>
-      <select id="modelSelect">
-        <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Fast — Llama 3.2 1B (~700MB)</option>
-        <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Smart — Llama 3.2 3B (~1.9GB)</option>
-        <option value="Phi-3.5-mini-instruct-q4f16_1-MLC">Balanced — Phi 3.5 mini (~2.3GB)</option>
-      </select>
-      <div class="hint">Bigger model = better answers but slower to download and think. Changing this reloads the brain.</div>
-    </div>
-
-    <div class="field">
-      <label>Listening language</label>
-      <select id="langSelect">
-        <option value="en-IN">English (India)</option>
-        <option value="en-US">English (US)</option>
-        <option value="hi-IN">Hindi</option>
-        <option value="pa-IN">Punjabi (if supported by browser)</option>
-      </select>
-      <div class="hint">Speech-to-text quality depends on your browser/OS, not on this app.</div>
-    </div>
-
-    <div class="field">
-      <label>AI voice</label>
-      <select id="voiceSelect"><option>Loading voices…</option></select>
-    </div>
-
-    <div class="field">
-      <div class="toggle-row" id="autoListenRow">
-        <span>Auto-listen after reply</span>
-        <div class="switch on" id="autoListenSwitch"></div>
-      </div>
-      <div class="hint">Keeps the call going hands-free, like a real phone call.</div>
-    </div>
-  </div>
+<div class="row">
+<button id="main" class="main">🎙️ Start Call</button>
+<button id="clear" class="clear">🗑️</button>
+</div>
+<div class="note">Best results: Chrome + HTTPS/localhost</div>
 </div>
 
-<script type="module">
-import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+<script>
+const main=document.getElementById("main"),clear=document.getElementById("clear");
+const status=document.getElementById("status"),sub=document.getElementById("sub");
+const log=document.getElementById("log"),avatar=document.getElementById("avatar");
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+const synth=window.speechSynthesis;
 
-// ---------- State ----------
-let engine = null;
-let engineModel = null;
-let engineLoading = false;
-let recognition = null;
-let callActive = false;
-let muted = false;
-let autoListen = true;
-let messages = [
-  { role: "system", content: "You are a warm, sharp, knowledgeable voice assistant on a phone call. Answer any question the caller asks — technology, science, everyday life, anything — clearly and conversationally, like a smart human would on the phone. Keep answers reasonably concise (2-5 sentences) unless asked for more detail, since this is spoken aloud." }
-];
-let rafId = null;
+let rec=null,stream=null,active=false,speaking=false,thinking=false;
+let lang="en-IN",requestNo=0,history=[];
 
-// ---------- DOM ----------
-const $ = (id) => document.getElementById(id);
-const orb = $("orb"), statusVal = $("statusVal"), caption = $("caption");
-const callBtn = $("callBtn"), muteToggle = $("muteToggle"), clearBtn = $("clearBtn");
-const loadWrap = $("loadWrap"), loadFill = $("loadFill"), loadText = $("loadText");
-const historyEl = $("history"), historyToggle = $("historyToggle"), historyIconBtn = $("historyIconBtn");
-const settingsBtn = $("settingsBtn"), drawerBackdrop = $("drawerBackdrop"), closeDrawer = $("closeDrawer");
-const modelSelect = $("modelSelect"), langSelect = $("langSelect"), voiceSelect = $("voiceSelect");
-const autoListenRow = $("autoListenRow"), autoListenSwitch = $("autoListenSwitch");
-const bars = $("bars").querySelectorAll("span");
-const liveDot = $("liveDot");
-const warnBanner = $("warnBanner");
-const [ring1, ring2, ring3] = [$("ring1"), $("ring2"), $("ring3")];
-
-function setStatus(text, cls){
-  statusVal.textContent = text;
-  statusVal.className = "val" + (cls ? " " + cls : "");
+function add(type,text){
+  const d=document.createElement("div");
+  d.className="msg "+type;
+  d.textContent=text;
+  log.appendChild(d);
+  log.scrollTop=log.scrollHeight;
 }
-function setOrbState(cls){
-  orb.classList.remove("listening", "speaking", "thinking");
-  [ring1, ring2, ring3].forEach(r => r.classList.remove("animate"));
-  if(cls){
-    orb.classList.add(cls);
-    if(cls === "listening" || cls === "speaking"){
-      [ring1, ring2, ring3].forEach(r => r.classList.add("animate"));
-    }
+
+function setStatus(a,b){
+  status.textContent=a; sub.textContent=b;
+}
+
+function setup(){
+  if(!SpeechRecognition){
+    setStatus("Not supported","Use Google Chrome");
+    main.disabled=true; return false;
   }
-}
-function setCaption(text, who){
-  if(!text){
-    caption.innerHTML = '<span class="placeholder">Tap the orb and ask anything — tech, life, whatever\'s on your mind. No API key, runs free in your browser.</span>';
-    return;
-  }
-  caption.innerHTML = (who ? `<span class="who">${who}</span>` : "") + text;
-}
-function pushHistory(role, text){
-  const empty = historyEl.querySelector(".empty-hist");
-  if(empty) empty.remove();
-  const div = document.createElement("div");
-  div.className = "msg " + (role === "user" ? "user" : "ai");
-  div.textContent = text;
-  historyEl.appendChild(div);
-  historyEl.scrollTop = historyEl.scrollHeight;
-}
-function warn(msg){
-  warnBanner.textContent = msg;
-  warnBanner.classList.add("show");
-}
-function clearWarn(){ warnBanner.classList.remove("show"); }
+  rec=new SpeechRecognition();
+  rec.lang=lang;
+  rec.continuous=true;
+  rec.interimResults=false;
+  rec.maxAlternatives=1;
 
-// ---------- WebGPU check + cloud fallback ----------
-let useCloud = false; // true => use Puter.js cloud AI instead of on-device WebLLM
-const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  rec.onstart=()=>{ if(active&&!speaking&&!thinking)setStatus("Listening...","Speak now"); };
 
-async function hasRealWebGPU(){
-  if(!("gpu" in navigator)) return false;
-  try{
-    const adapter = await navigator.gpu.requestAdapter();
-    return !!adapter;
-  }catch(_e){
-    return false;
-  }
-}
+  rec.onresult=async e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(!e.results[i].isFinal) continue;
+      const text=e.results[i][0].transcript.trim();
+      if(!text) continue;
+      const low=text.toLowerCase();
 
-async function decideEngineMode(){
-  const gpuOk = await hasRealWebGPU();
-  if(!gpuOk || isMobileUA){
-    useCloud = true;
-    modelSelect.disabled = true;
-    const brainHint = document.querySelector('#modelSelect')?.closest('.field')?.querySelector('.hint');
-    if(brainHint) brainHint.textContent = "This device is using cloud AI (Puter.js) instead of the on-device brain, since on-device models need WebGPU + a lot of GPU memory that most phones don't have.";
-    document.querySelector(".footnote").textContent = "Cloud AI (via Puter.js) on this device · desktop Chrome/Edge uses the on-device brain instead";
-  }
-}
-const engineModeReady = decideEngineMode();
-
-// ---------- Speech Recognition setup ----------
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if(!SR){
-  warn((warnBanner.textContent ? warnBanner.textContent + " Also, " : "") + "speech recognition isn't supported in this browser — try desktop Chrome.");
-  callBtn.disabled = true;
-}
-
-function buildRecognition(){
-  const r = new SR();
-  r.lang = langSelect.value;
-  r.continuous = false;
-  r.interimResults = true;
-  r.maxAlternatives = 1;
-
-  r.onresult = (e) => {
-    let interim = "";
-    let final = "";
-    for(let i = e.resultIndex; i < e.results.length; i++){
-      const t = e.results[i][0].transcript;
-      if(e.results[i].isFinal) final += t;
-      else interim += t;
-    }
-    if(interim) setCaption(interim, "YOU");
-    if(final){
-      setCaption(final, "YOU");
-      stopVisualizer();
-      handleUserTurn(final.trim());
-    }
-  };
-  r.onerror = (e) => {
-    if(e.error === "no-speech" || e.error === "aborted") { return; }
-    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
-      warn("Microphone permission is blocked for this site. Allow it in your browser's site settings, then reload.");
-    }else if(e.error === "audio-capture"){
-      warn("No microphone was found, or it's being used by another app/tab. Close other apps using the mic and try again.");
-    }else{
-      // Transient errors (e.g. network, or the mic momentarily busy) — don't
-      // scare the user, just try to recover by restarting on the next onend.
-      console.warn("Speech recognition error (non-fatal):", e.error);
-      return;
-    }
-    setStatus("MIC ERROR");
-    setOrbState(null);
-  };
-  r.onend = () => {
-    if(callActive && !muted && orb.classList.contains("listening")){
-      // recognition auto-stopped without result; restart to keep listening
-      try{ r.start(); }catch(_e){}
-    }
-  };
-  return r;
-}
-
-// ---------- Mic visualizer ----------
-// IMPORTANT: this used to call getUserMedia() separately to drive the bars
-// off real audio levels. On mobile, that competed with SpeechRecognition's
-// own internal mic capture for exclusive access to the microphone, which
-// could starve SpeechRecognition of real audio and cause it to never
-// produce a final result (endless silent "listening" loop). The bars are
-// purely cosmetic, so we now animate them synthetically instead of touching
-// the mic at all — this guarantees SpeechRecognition gets uncontested access.
-function startVisualizer(){
-  let t = 0;
-  const animate = () => {
-    t += 1;
-    bars.forEach((b, i) => {
-      const wave = Math.sin(t * 0.18 + i * 0.9) * 0.5 + 0.5;
-      const jitter = Math.random() * 0.25;
-      const v = Math.min(1, wave * 0.75 + jitter);
-      b.style.height = (6 + v * 34) + "px";
-    });
-    rafId = requestAnimationFrame(animate);
-  };
-  animate();
-}
-function stopVisualizer(){
-  if(rafId) cancelAnimationFrame(rafId);
-  rafId = null;
-  bars.forEach(b => b.style.height = "8px");
-}
-
-// ---------- Model loading ----------
-async function ensureEngine(){
-  await engineModeReady;
-  if(useCloud) return null; // no local engine needed, Puter.js handles it per-request
-  const wanted = modelSelect.value;
-  if(engine && engineModel === wanted) return engine;
-  engineLoading = true;
-  loadWrap.classList.add("show");
-  setStatus("LOADING BRAIN", "thinking");
-  setOrbState("thinking");
-  try{
-    engine = await CreateMLCEngine(wanted, {
-      initProgressCallback: (p) => {
-        const pct = Math.round((p.progress || 0) * 100);
-        loadFill.style.width = pct + "%";
-        loadText.textContent = (p.text || "Loading model…") + ` (${pct}%)`;
+      if(/^(stop|ruk|ruko|chup|bas|cancel|pause)$/.test(low) ||
+         /^(stop|ruk|ruko|chup|bas|cancel|pause)\s/.test(low)){
+        interrupt(); continue;
       }
-    });
-    engineModel = wanted;
-    loadWrap.classList.remove("show");
-    return engine;
+
+      if(speaking) stopSpeech();
+      add("you","You: "+text);
+      history.push({role:"user",content:text});
+      askAI();
+    }
+  };
+
+  rec.onerror=e=>{
+    console.log("Recognition:",e.error);
+    if(e.error==="not-allowed"||e.error==="service-not-allowed"){
+      setStatus("Microphone blocked","Allow microphone permission in Chrome");
+      add("sys","Microphone permission was denied.");
+      end(false);
+    } else if(e.error==="audio-capture"){
+      setStatus("Microphone unavailable","Check your phone microphone");
+    }
+  };
+
+  rec.onend=()=>{
+    if(active && !speaking && !thinking){
+      setTimeout(startRec,500);
+    }
+  };
+  return true;
+}
+
+function startRec(){
+  if(!active||speaking||thinking||!rec)return;
+  try{rec.start()}catch(e){}
+}
+
+async function getMic(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw new Error("Microphone API unavailable. Open this page in Chrome over HTTPS or localhost.");
+  }
+  stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  return true;
+}
+
+async function start(){
+  if(active)return;
+  if(!setup())return;
+
+  setStatus("Requesting microphone...","Please tap Allow if Chrome asks");
+  try{
+    await getMic();
   }catch(e){
     console.error(e);
-    warn("Couldn't load the on-device model. Your GPU/browser may not have enough memory, or try the smaller 'Fast' model in Settings.");
-    setStatus("LOAD FAILED");
-    setOrbState(null);
-    loadWrap.classList.remove("show");
-    throw e;
-  }finally{
-    engineLoading = false;
+    setStatus("Microphone permission needed","Allow microphone access, then tap Start again");
+    add("sys","Could not access microphone. "+e.message);
+    return;
   }
+
+  active=true;
+  main.textContent="📞 End Call";
+  main.classList.add("end");
+  avatar.classList.add("active");
+  add("sys","Call started. I'm listening.");
+  setStatus("Listening...","Speak now");
+  startRec();
 }
 
-// ---------- TTS ----------
-let voices = [];
-function loadVoices(){
-  voices = window.speechSynthesis.getVoices();
-  if(!voices.length) return;
-  voiceSelect.innerHTML = "";
-  voices.forEach((v, i) => {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = `${v.name} (${v.lang})`;
-    voiceSelect.appendChild(opt);
-  });
-  const preferred = voices.findIndex(v => v.lang === langSelect.value);
-  if(preferred >= 0) voiceSelect.value = preferred;
+function end(message=true){
+  active=false; requestNo++; thinking=false;
+  stopSpeech();
+  if(rec)try{rec.stop()}catch(e){}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  main.textContent="🎙️ Start Call";main.classList.remove("end");
+  avatar.classList.remove("active");
+  setStatus("Call ended","Tap Start to talk again");
+  if(message)add("sys","Call ended.");
 }
-window.speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
+
+function stopSpeech(){
+  synth.cancel(); speaking=false; avatar.classList.remove("active");
+}
+
+function interrupt(){
+  requestNo++; thinking=false; stopSpeech();
+  add("sys","Interrupted. Listening again.");
+  if(active){setStatus("Listening...","Speak now");startRec();}
+}
+
+async function askAI(){
+  if(!active)return;
+  thinking=true; const id=++requestNo;
+  setStatus("Thinking...","AI is preparing a reply");
+  try{
+    const msgs=[
+      {role:"system",content:`You are a friendly voice assistant. Reply briefly and naturally for speech. Current language: ${lang==="pa-IN"?"Punjabi":lang==="hi-IN"?"Hindi":"English"}. Do not use markdown.`},
+      ...history.slice(-10)
+    ];
+    const r=await puter.ai.chat(msgs);
+    if(!active||id!==requestNo)return;
+    const text=typeof r==="string"?r:(r?.message?.content||r?.content||"Okay.");
+    history.push({role:"assistant",content:text});
+    add("ai","AI: "+text);
+    thinking=false;
+    speak(text);
+  }catch(e){
+    console.error("Puter:",e);
+    if(active&&id===requestNo){
+      thinking=false;
+      add("ai","AI: Sorry, I couldn't connect right now.");
+      setStatus("Listening...","Speak again");
+      startRec();
+    }
+  }
+}
 
 function speak(text){
-  return new Promise((resolve) => {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    const idx = parseInt(voiceSelect.value);
-    if(voices[idx]) utter.voice = voices[idx];
-    utter.rate = 1.0;
-    utter.pitch = 1.0;
-    utter.onend = resolve;
-    utter.onerror = resolve;
-    window.speechSynthesis.speak(utter);
-  });
+  if(!active)return;
+  stopSpeech();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang=lang;u.rate=1.05;u.pitch=1;
+  const voices=synth.getVoices();
+  const v=voices.find(x=>x.lang.toLowerCase().startsWith(lang.slice(0,2).toLowerCase()));
+  if(v)u.voice=v;
+  u.onstart=()=>{speaking=true;avatar.classList.add("active");setStatus("Speaking...","Say Stop to interrupt");};
+  u.onend=()=>{speaking=false;avatar.classList.remove("active");if(active){setStatus("Listening...","Speak now");startRec();}};
+  u.onerror=()=>{speaking=false;avatar.classList.remove("active");if(active)startRec();};
+  synth.speak(u);
 }
 
-// ---------- Conversation turn ----------
-async function handleUserTurn(text){
-  if(!text) return;
-  pushHistory("user", text);
-  messages.push({ role: "user", content: text });
+main.onclick=()=>active?end():start();
 
-  setStatus("THINKING", "thinking");
-  setOrbState("thinking");
-  setCaption("…", "RING");
+clear.onclick=()=>{
+  history=[];
+  log.innerHTML='<div class="msg sys">Conversation cleared.</div>';
+};
 
-  try{
-    let answer;
-    if(useCloud){
-      const withTimeout = (p, ms) => Promise.race([
-        p,
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Cloud AI request timed out")), ms))
-      ]);
-      const result = await withTimeout(puter.ai.chat(messages, {
-        model: "claude-sonnet-4-6",
-        temperature: 0.7,
-        max_tokens: 400
-      }), 25000);
-      const content = result?.message?.content;
-      answer = (Array.isArray(content) ? content.map(c => c.text || "").join("") : (content || result?.toString?.() || "")).trim();
-      if(!answer) throw new Error("Empty response from cloud AI");
-    }else{
-      const eng = await ensureEngine();
-      const reply = await eng.chat.completions.create({
-        messages,
-        temperature: 0.7,
-        max_tokens: 400
-      });
-      answer = reply.choices[0].message.content.trim();
-    }
-    messages.push({ role: "assistant", content: answer });
-    pushHistory("ai", answer);
-    setCaption(answer, "RING");
-
-    setStatus("SPEAKING", "speaking");
-    setOrbState("speaking");
-    await speak(answer);
-
-    if(callActive && autoListen && !muted){
-      beginListening();
-    }else{
-      setStatus(callActive ? "TAP TO SPEAK" : "TAP TO CALL");
-      setOrbState(null);
-    }
-  }catch(e){
-    console.error(e);
-    setStatus("ERROR");
-    setOrbState(null);
-    setCaption("Something went wrong thinking that through. Try again.", "RING");
-  }
-}
-
-// ---------- Listening control ----------
-function beginListening(){
-  if(!callActive || muted) return;
-  recognition = buildRecognition();
-  try{ recognition.start(); }catch(_e){}
-  setStatus("LISTENING", "listening");
-  setOrbState("listening");
-  setCaption("", null);
-  startVisualizer();
-}
-function stopListening(){
-  if(recognition){
-    recognition.onend = null;
-    try{ recognition.stop(); }catch(_e){}
-    recognition = null;
-  }
-  stopVisualizer();
-}
-
-// ---------- Call lifecycle ----------
-async function startCall(){
-  clearWarn();
-  callActive = true;
-  liveDot.classList.add("live");
-  callBtn.textContent = "";
-  callBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.16 21 3 13.84 3 5a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2z"/></svg> End Call';
-  callBtn.classList.add("end");
-  try{
-    await engineModeReady;
-    // Sign in to Puter's cloud AI now, while we're still inside the direct
-    // button-tap gesture. If we waited until the user finished speaking and
-    // tried to sign in from inside the speech-recognition callback instead,
-    // the sign-in popup would count as unsolicited and mobile browsers would
-    // silently block it — leaving handleUserTurn() waiting forever with no
-    // visible error, which looks like "no response at all".
-    if(useCloud && window.puter && puter.auth){
-      const signedIn = await puter.auth.isSignedIn().catch(() => false);
-      if(!signedIn){
-        setStatus("SIGN IN TO CLOUD AI", "thinking");
-        setOrbState("thinking");
-        await puter.auth.signIn();
-      }
-    }
-    await ensureEngine();
-  }catch(e){
-    console.error(e);
-    warn("Couldn't connect to the cloud AI. If a sign-in popup appeared, please allow popups for this site, then tap Start Call again.");
-    endCall();
-    return;
-  }
-  beginListening();
-}
-function endCall(){
-  callActive = false;
-  liveDot.classList.remove("live");
-  window.speechSynthesis.cancel();
-  stopListening();
-  setStatus("TAP TO CALL");
-  setOrbState(null);
-  setCaption("", null);
-  callBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.16 21 3 13.84 3 5a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.58a1 1 0 0 1-.25 1.01l-2.2 2.2z"/></svg> Start Call';
-  callBtn.classList.remove("end");
-}
-
-// ---------- Events ----------
-callBtn.addEventListener("click", () => { callActive ? endCall() : startCall(); });
-orb.addEventListener("click", () => {
-  if(!callActive) { startCall(); return; }
-  if(orb.classList.contains("listening")){ stopListening(); setStatus("TAP TO SPEAK"); setOrbState(null); }
-  else if(!orb.classList.contains("thinking") && !orb.classList.contains("speaking")){ beginListening(); }
-});
-orb.addEventListener("keydown", (e) => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); orb.click(); }});
-
-muteToggle.addEventListener("click", () => {
-  muted = !muted;
-  muteToggle.style.color = muted ? "var(--danger)" : "";
-  muteToggle.style.borderColor = muted ? "#5a2a30" : "";
-  if(muted) stopListening();
-  else if(callActive && orb.classList.contains("listening") === false && !orb.classList.contains("thinking") && !orb.classList.contains("speaking")) beginListening();
+document.querySelectorAll(".lang").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll(".lang").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+    lang=b.dataset.l;
+    if(rec)rec.lang=lang;
+    add("sys","Language changed.");
+  };
 });
 
-clearBtn.addEventListener("click", () => {
-  messages = [messages[0]];
-  historyEl.innerHTML = '<div class="empty-hist">Nothing said yet.</div>';
-  setCaption("", null);
-});
+if("onvoiceschanged" in synth)synth.onvoiceschanged=()=>synth.getVoices();
 
-historyToggle.addEventListener("click", () => historyEl.classList.toggle("show"));
-historyIconBtn.addEventListener("click", () => {
-  historyEl.classList.toggle("show");
-  historyEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-});
-
-settingsBtn.addEventListener("click", () => drawerBackdrop.classList.add("show"));
-closeDrawer.addEventListener("click", () => drawerBackdrop.classList.remove("show"));
-drawerBackdrop.addEventListener("click", (e) => { if(e.target === drawerBackdrop) drawerBackdrop.classList.remove("show"); });
-
-modelSelect.addEventListener("change", () => { engine = null; engineModel = null; });
-langSelect.addEventListener("change", () => { if(recognition) { stopListening(); if(callActive && !muted) beginListening(); }});
-
-autoListenRow.addEventListener("click", () => {
-  autoListen = !autoListen;
-  autoListenSwitch.classList.toggle("on", autoListen);
-});
+if(!SpeechRecognition){
+  setStatus("Chrome required","Speech recognition is not supported here");
+}
 </script>
 </body>
 </html>
