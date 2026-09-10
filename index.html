@@ -72,7 +72,7 @@ function setup(){
   }
   rec=new SpeechRecognition();
   rec.lang=lang;
-  rec.continuous=true;
+  rec.continuous=false;
   rec.interimResults=false;
   rec.maxAlternatives=1;
 
@@ -176,13 +176,14 @@ function interrupt(){
 async function askAI(){
   if(!active)return;
   thinking=true; const id=++requestNo;
+  setTimeout(()=>{},0);
   setStatus("Thinking...","AI is preparing a reply");
   try{
     const msgs=[
       {role:"system",content:`You are a friendly voice assistant. Reply briefly and naturally for speech. Current language: ${lang==="pa-IN"?"Punjabi":lang==="hi-IN"?"Hindi":"English"}. Do not use markdown.`},
       ...history.slice(-10)
     ];
-    const r=await puter.ai.chat(msgs);
+    const r=await Promise.race([puter.ai.chat(msgs,{model:"gpt-5.6-luna",normalize:true}),new Promise((_,reject)=>setTimeout(()=>reject(new Error("AI request timed out after 25 seconds")),25000))]);
     if(!active||id!==requestNo)return;
     const text=typeof r==="string"?r:(r?.message?.content||r?.content||"Okay.");
     history.push({role:"assistant",content:text});
