@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Fast AI Voice Caller</title>
-<script src="https://js.puter.com/v2/"></script>
 <style>
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#020617;color:#fff;font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;padding:16px}
@@ -18,15 +17,17 @@ h1{text-align:center;font-size:22px;margin:0 0 8px}.hint{text-align:center;color
 #log{height:260px;overflow:auto;background:#020617;border-radius:16px;padding:12px;margin-bottom:14px}.msg{padding:10px 12px;margin:7px 0;border-radius:13px;font-size:13px;line-height:1.45;word-break:break-word}.you{background:#1d4ed8;margin-left:18%}.ai{background:#1e293b;margin-right:18%}.sys{text-align:center;color:#64748b;font-size:11px}
 .row{display:flex;gap:10px}button{cursor:pointer;font:inherit}.main{flex:1;border:0;border-radius:16px;padding:16px;color:#fff;font-weight:700;background:#2563eb}.main.end{background:#dc2626}.clear{width:55px;border:1px solid #334155;border-radius:16px;background:#1e293b;color:#fff}
 .note{font-size:10px;text-align:center;color:#475569;margin-top:12px}
+.warn{background:#7c2d12;color:#fed7aa;border-radius:10px;padding:9px 11px;font-size:11.5px;text-align:center;margin-bottom:14px;line-height:1.4;display:none}
 </style>
 </head>
 <body>
 <div class="app">
 <h1>🤖 Fast AI Voice Caller</h1>
 <div class="hint">Browser AI voice assistant</div>
+<div id="secWarn" class="warn"></div>
 <div id="avatar" class="avatar">🤖</div>
 <div id="status">Ready</div>
-<div id="sub">Tap Start and allow microphone access</div>
+<div id="sub">Tap Start — first time downloads a small on-device AI model</div>
 
 <div class="langs">
 <button class="lang sel" data-l="en-IN">English</button>
@@ -40,18 +41,52 @@ h1{text-align:center;font-size:22px;margin:0 0 8px}.hint{text-align:center;color
 <button id="main" class="main">🎙️ Start Call</button>
 <button id="clear" class="clear">🗑️</button>
 </div>
-<div class="note">Best results: Chrome + HTTPS/localhost</div>
+<div class="note">100% local — no account, no API key, no sign-in. First tap downloads a small AI model (~300MB, one-time, cached after). Must be opened via http://localhost (not by double-clicking the file) — Chrome blocks the microphone otherwise. Run: <code>python3 -m http.server 8000</code> in this file's folder, then open http://localhost:8000</div>
 </div>
 
 <script>
 const main=document.getElementById("main"),clear=document.getElementById("clear");
 const status=document.getElementById("status"),sub=document.getElementById("sub");
 const log=document.getElementById("log"),avatar=document.getElementById("avatar");
+const secWarn=document.getElementById("secWarn");
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 const synth=window.speechSynthesis;
 
+// Chrome only allows microphone access on https:// or localhost/127.0.0.1.
+// Opening this file directly (file://) or over plain http:// on a LAN IP
+// will silently fail to get microphone access.
+function isSecureEnough(){
+  return location.protocol==="https:" ||
+         location.hostname==="localhost" ||
+         location.hostname==="127.0.0.1";
+}
+if(!isSecureEnough()){
+  secWarn.style.display="block";
+  secWarn.textContent="⚠️ This page is opened as \""+location.protocol+"\" which blocks microphone access in Chrome. Serve it from http://localhost instead (see note below) and open it there.";
+}
+
 let rec=null,stream=null,active=false,speaking=false,thinking=false;
 let lang="en-IN",requestNo=0,history=[];
+let generator=null,modelLoading=false;
+
+// Runs a small instruct model 100% on-device via Transformers.js (Hugging Face).
+// No account, no API key, no sign-in — just a one-time model download from a
+// public CDN, cached by the browser afterwards. Uses WebGPU when available
+// (fast) and falls back to WASM (much slower, but works everywhere).
+const MODEL_ID="onnx-community/Qwen2.5-0.5B-Instruct";
+async function loadModel(onProgress){
+  const {pipeline}=await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5");
+  try{
+    return await pipeline("text-generation",MODEL_ID,{
+      device: navigator.gpu ? "webgpu" : "wasm",
+      dtype: navigator.gpu ? "q4" : "q8",
+      progress_callback: onProgress
+    });
+  }catch(err){
+    console.warn("Preferred backend failed, retrying on wasm:",err);
+    return await pipeline("text-generation",MODEL_ID,{device:"wasm",progress_callback:onProgress});
+  }
+}
 
 function add(type,text){
   const d=document.createElement("div");
@@ -133,6 +168,27 @@ async function start(){
   if(active)return;
   if(!setup())return;
 
+  if(!generator && !modelLoading){
+    modelLoading=true;
+    setStatus("Loading AI model...","One-time download, please wait");
+    add("sys","Loading the on-device AI model (~300MB the first time, cached after that — no account needed).");
+    try{
+      generator=await loadModel(p=>{
+        if(p.status==="progress"&&typeof p.progress==="number"){
+          setStatus("Downloading model...",Math.round(p.progress)+"%");
+        }
+      });
+      add("sys","Model ready. Everything runs on this device.");
+    }catch(e){
+      console.error("Model load failed:",e);
+      setStatus("Model failed to load","Check your internet connection and reload the page");
+      add("sys","Could not load the AI model: "+(e?.message||e));
+      modelLoading=false;
+      return;
+    }
+    modelLoading=false;
+  }
+
   setStatus("Requesting microphone...","Please tap Allow if Chrome asks");
   try{
     await getMic();
@@ -176,25 +232,31 @@ function interrupt(){
 async function askAI(){
   if(!active)return;
   thinking=true; const id=++requestNo;
-  setTimeout(()=>{},0);
   setStatus("Thinking...","AI is preparing a reply");
   try{
+    if(!generator) throw new Error("Model is not loaded yet — tap End Call and Start Call again.");
+    const langName=lang==="pa-IN"?"Punjabi":lang==="hi-IN"?"Hindi":"English";
     const msgs=[
-      {role:"system",content:`You are a friendly voice assistant. Reply briefly and naturally for speech. Current language: ${lang==="pa-IN"?"Punjabi":lang==="hi-IN"?"Hindi":"English"}. Do not use markdown.`},
-      ...history.slice(-10)
+      {role:"system",content:`You are a friendly, concise voice assistant. Reply in 1-3 short sentences, naturally for speech, in ${langName}. Do not use markdown or emojis.`},
+      ...history.slice(-6)
     ];
-    const r=await Promise.race([puter.ai.chat(msgs,{model:"gpt-5.6-luna",normalize:true}),new Promise((_,reject)=>setTimeout(()=>reject(new Error("AI request timed out after 25 seconds")),25000))]);
+    const output=await Promise.race([
+      generator(msgs,{max_new_tokens:120,temperature:0.7,do_sample:true}),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error("Local model took too long (60s) — this device may be too slow for smooth replies.")),60000))
+    ]);
     if(!active||id!==requestNo)return;
-    const text=typeof r==="string"?r:(r?.message?.content||r?.content||"Okay.");
+    const last=output[0].generated_text.at(-1);
+    const text=(last&&last.content?last.content:"Okay.").trim();
     history.push({role:"assistant",content:text});
     add("ai","AI: "+text);
     thinking=false;
     speak(text);
   }catch(e){
-    console.error("Puter:",e);
+    console.error("Local model:",e);
     if(active&&id===requestNo){
       thinking=false;
-      add("ai","AI: Sorry, I couldn't connect right now.");
+      const msg=e?.message||String(e);
+      add("ai","AI: Sorry, I couldn't generate a reply. ("+msg+")");
       setStatus("Listening...","Speak again");
       startRec();
     }
